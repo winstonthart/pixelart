@@ -84,13 +84,26 @@ bppInput.addEventListener("input", () => {
 editor.addEventListener("input", render);
 editor.addEventListener("beforeinput", (e) => {
   if (
-    e.data !== null &&               // Only block if there is new input
-    !["0", "1", " "].includes(e.data) &&  // Allow only '0' or '1'
-    e.inputType.startsWith("insert") // Block only insertion, not deletions etc.
+    e.inputType === "insertFromPaste" && e.clipboardData
+  ) {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    const cleaned = text.replace(/[^01\s]/g, "");
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const value = editor.value;
+    editor.value = value.slice(0, start) + cleaned + value.slice(end);
+    editor.setSelectionRange(start + cleaned.length, start + cleaned.length);
+    render();
+  } else if (
+    e.data !== null &&
+    !["0", "1", " "].includes(e.data) &&
+    e.inputType.startsWith("insert")
   ) {
     e.preventDefault();
   }
 });
+
 
 widthInput.addEventListener("input", render);
 heightInput.addEventListener("input", render);
