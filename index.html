@@ -82,20 +82,9 @@ bppInput.addEventListener("input", () => {
 });
 
 editor.addEventListener("input", render);
+// Allow only 0,1 and space on typing
 editor.addEventListener("beforeinput", (e) => {
   if (
-    e.inputType === "insertFromPaste" && e.clipboardData
-  ) {
-    e.preventDefault();
-    const text = e.clipboardData.getData("text/plain");
-    const cleaned = text.replace(/[^01\s]/g, "");
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    const value = editor.value;
-    editor.value = value.slice(0, start) + cleaned + value.slice(end);
-    editor.setSelectionRange(start + cleaned.length, start + cleaned.length);
-    render();
-  } else if (
     e.data !== null &&
     !["0", "1", " "].includes(e.data) &&
     e.inputType.startsWith("insert")
@@ -103,6 +92,24 @@ editor.addEventListener("beforeinput", (e) => {
     e.preventDefault();
   }
 });
+
+// Clean pasted content on paste event instead of beforeinput
+editor.addEventListener("paste", (e) => {
+  e.preventDefault();
+  const text = (e.clipboardData || window.clipboardData).getData("text");
+  const cleaned = text.replace(/[^01\s]/g, "");
+  
+  // Insert cleaned text at cursor
+  const start = editor.selectionStart;
+  const end = editor.selectionEnd;
+  const value = editor.value;
+  editor.value = value.slice(0, start) + cleaned + value.slice(end);
+  
+  // Move cursor to after inserted text
+  editor.setSelectionRange(start + cleaned.length, start + cleaned.length);
+  render();
+});
+
 
 
 widthInput.addEventListener("input", render);
