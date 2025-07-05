@@ -42,7 +42,7 @@
 <div class="main-container">
   <!-- Text area FIRST on the left -->
   <div class="left-panel">
-<textarea id="pixelEditor" rows="20" placeholder="Enter binary pixel data: row by row, top to bottom, left to right. Separate rows with line breaks. Only use 0s and 1s."></textarea>
+<textarea id="pixelEditor" rows="20" placeholder="Enter binary pixel data: row by row, top to bottom, left to right. Only use 0s and 1s."></textarea>
     <div class="buttons">
       <button onclick="reformat()">Reformat Data</button>
       <button onclick="saveEditorText()">Save Pixel Data File</button>
@@ -110,8 +110,6 @@ editor.addEventListener("paste", (e) => {
   render();
 });
 
-
-
 widthInput.addEventListener("input", render);
 heightInput.addEventListener("input", render);
 
@@ -152,7 +150,7 @@ function createBit(className) {
   return span;
 }
 
-function render() {
+function render(showGrid = true) {
   const width = parseInt(widthInput.value);
   const height = parseInt(heightInput.value);
   const bpp = parseInt(bppInput.value);
@@ -197,12 +195,33 @@ function render() {
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = y * width + x;
       const bits = idx < pixels.length ? pixels[idx] : "0".repeat(bpp);
       ctx.fillStyle = bitsToRGB(bits);
       ctx.fillRect(x * 40, y * 40, 40, 40);
+    }
+  }
+
+  // Draw white grid lines only if showGrid is true
+  if (showGrid) {
+    ctx.strokeStyle = "grey";
+    ctx.lineWidth = 1;
+    // Draw horizontal lines
+    for (let y = 0; y <= height; y++) {
+      ctx.beginPath();
+      ctx.moveTo(0, y * 40 + 0.5);
+      ctx.lineTo(width * 40, y * 40 + 0.5);
+      ctx.stroke();
+    }
+    // Draw vertical lines
+    for (let x = 0; x <= width; x++) {
+      ctx.beginPath();
+      ctx.moveTo(x * 40 + 0.5, 0);
+      ctx.lineTo(x * 40 + 0.5, height * 40);
+      ctx.stroke();
     }
   }
 }
@@ -257,10 +276,14 @@ function importEditorText(event) {
 }
 
 function saveImage() {
+  // Render without grid to export a clean image
+  render(false);
   const a = document.createElement("a");
   a.href = canvas.toDataURL("image/png");
   a.download = "pixel_image.png";
   a.click();
+  // Restore grid after saving for user view
+  render(true);
 }
 
 updateBppFormat(parseInt(bppInput.value));
