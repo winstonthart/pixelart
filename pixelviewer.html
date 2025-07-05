@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Binary Pixel Editor & Viewer</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  label { margin-right: 15px; }
+  textarea { font-family: monospace; width: 100%; box-sizing: border-box; }
+  #bppFormat {
+    font-family: monospace;
+    font-weight: bold;
+    margin-left: 10px;
+    vertical-align: middle;
+    user-select: none;
+  }
+  .bit-red { color: red; }
+  .bit-green { color: green; }
+  .bit-blue { color: blue; }
+  .bit-white { color: white; background: black; padding: 0 3px; border-radius: 3px; }
+  .bit-grey-dark { color: #555; }
+  .bit-grey-light { color: #bbb; }
+  .main-container { display: flex; flex-wrap: wrap; margin-top: 20px; gap: 20px; }
+  .left-panel, .right-panel { flex: 1 1 300px; }
+  canvas { border: 1px solid #ccc; }
+  .buttons { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 10px; }
+</style>
+</head>
+<body>
+<h3>Binary Pixel Editor & Viewer</h3>
+
+<div>
+  <label>Width: <input type="number" id="widthInput" value="5" min="1" /></label>
+  <label>Height: <input type="number" id="heightInput" value="5" min="1" /></label>
+  <label>Bits Per Pixel:
+    <input type="range" id="bppSlider" min="1" max="24" value="3" />
+    <input type="number" id="bppInput" min="1" max="24" value="3" style="width:50px;" />
+    <span id="bppFormat"></span>
+  </label>
+</div>
+
+<div class="main-container">
+  <!-- Text area FIRST on the left -->
+  <div class="left-panel">
+<textarea id="pixelEditor" rows="20" placeholder="Enter binary pixel data: row by row, top to bottom, left to right. Separate rows with line breaks. Only use 0s and 1s."></textarea>
+    <div class="buttons">
+      <button onclick="reformat()">Reformat Data</button>
+      <button onclick="saveEditorText()">Save Pixel Data File</button>
+      <button onclick="document.getElementById('importInput').click();">Import Pixel Data File</button>
+      <button onclick="saveImage()">Save As Image</button>
+      <input type="file" id="importInput" style="display:none" accept=".txt" onchange="importEditorText(event)" />
+    </div>
+  </div>
+
+  <!-- Canvas SECOND on the right -->
+  <div class="right-panel">
+    <canvas id="myCanvas"></canvas>
+  </div>
+</div>
+
+<script>
+const editor = document.getElementById("pixelEditor");
+const canvas = document.getElementById("myCanvas");
+const ctx = canvas.getContext("2d");
+const widthInput = document.getElementById("widthInput");
+const heightInput = document.getElementById("heightInput");
+const bppSlider = document.getElementById("bppSlider");
+const bppInput = document.getElementById("bppInput");
+const bppFormat = document.getElementById("bppFormat");
+
+bppSlider.addEventListener("input", () => {
+  let val = parseInt(bppSlider.value);
+  bppInput.value = val;
+  updateBppFormat(val);
+  render();
+});
+bppInput.addEventListener("input", () => {
+  let val = Math.min(Math.max(parseInt(bppInput.value) || 1, 1), 24);
+  bppSlider.value = val;
+  updateBppFormat(val);
+  render();
+});
+
+editor.addEventListener("input", render);
+editor.addEventListener("beforeinput", (e) => {
+  if (
+    e.data !== null &&               // Only block if there is new input
+    !["0", "1", " "].includes(e.data) &&  // Allow only '0' or '1'
+    e.inputType.startsWith("insert") // Block only insertion, not deletions etc.
+  ) {
+    e.preventDefault();
+  }
+});
+
+widthInput.addEventListener("input", render);
+heightInput.addEventListener("input", render);
+
+function updateBppFormat(bpp) {
+  bppFormat.innerHTML = "";
+  if (bpp === 1) {
+    const span = document.createElement("span");
+    span.textContent = "1";
+    span.className = "bit-white";
+    bppFormat.appendChild(span);
+    return;
+  }
+  if (bpp === 2) {
+    const darkGray = document.createElement("span");
+    darkGray.textContent = "1";
+    darkGray.className = "bit-grey-dark";
+    bppFormat.appendChild(darkGray);
+
+    const lightGray = document.createElement("span");
+    lightGray.textContent = "1";
+    lightGray.className = "bit-grey-light";
+    bppFormat.appendChild(lightGray);
+    return;
+  }
+  const baseBits = Math.floor(bpp / 3);
+  const remainder = bpp % 3;
+  const rBits = baseBits + (remainder > 0 ? 1 : 0);
+  const gBits = baseBits + (remainder > 1 ? 1 : 0);
+  const bBits = baseBits;
+  for (let i = 0; i < rBits; i++) bppFormat.appendChild(createBit("bit-red"));
+  for (let i = 0; i < gBits; i++) bppFormat.appendChild(createBit("bit-green"));
+  for (let i = 0; i < bBits; i++) bppFormat.appendChild(createBit("bit-blue"));
+}
+function createBit(className) {
+  const span = document.createElement("span");
+  span.textContent = "1";
+  span.className = className;
+  return span;
+}
+
+function render() {
+  const width = parseInt(widthInput.value);
+  const height = parseInt(heightInput.value);
+  const bpp = parseInt(bppInput.value);
+
+  const lines = editor.value.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  let allBits = "";
+  lines.forEach(line => { allBits += line.replace(/\s+/g, ""); });
+
+  const pixels = [];
+  for (let i = 0; i < allBits.length; i += bpp) {
+    let chunk = allBits.substr(i, bpp).padEnd(bpp, "0");
+    pixels.push(chunk);
+  }
+
+  canvas.width = width * 40;
+  canvas.height = height * 40;
+
+  function bitsToRGB(bits) {
+    if (bits.length === 1) return bits === "1" ? "rgb(255,255,255)" : "rgb(0,0,0)";
+    if (bits.length === 2) {
+      switch (bits) {
+        case "00": return "rgb(0,0,0)";
+        case "01": return "rgb(85,85,85)";
+        case "10": return "rgb(170,170,170)";
+        case "11": return "rgb(255,255,255)";
+        default: return "rgb(0,0,0)";
+      }
+    }
+    const baseBits = Math.floor(bits.length / 3);
+    const remainder = bits.length % 3;
+    const rBits = baseBits + (remainder > 0 ? 1 : 0);
+    const gBits = baseBits + (remainder > 1 ? 1 : 0);
+    const bBits = baseBits;
+    let idx = 0;
+    const rStr = bits.substr(idx, rBits); idx += rBits;
+    const gStr = bits.substr(idx, gBits); idx += gBits;
+    const bStr = bits.substr(idx, bBits);
+    const r = Math.round(parseInt(rStr, 2) * 255 / (Math.pow(2, rBits) - 1 || 1));
+    const g = Math.round(parseInt(gStr, 2) * 255 / (Math.pow(2, gBits) - 1 || 1));
+    const b = Math.round(parseInt(bStr, 2) * 255 / (Math.pow(2, bBits) - 1 || 1));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      const bits = idx < pixels.length ? pixels[idx] : "0".repeat(bpp);
+      ctx.fillStyle = bitsToRGB(bits);
+      ctx.fillRect(x * 40, y * 40, 40, 40);
+    }
+  }
+}
+
+function reformat() {
+  const bpp = parseInt(bppInput.value);
+  const width = parseInt(widthInput.value);
+  const raw = editor.value.replace(/\s+/g, "");
+  const pixels = [];
+  for (let i = 0; i < raw.length; i += bpp) {
+    pixels.push(raw.substr(i, bpp));
+  }
+  let output = "";
+  for (let i = 0; i < pixels.length; i += width) {
+    output += pixels.slice(i, i + width).join(" ") + "\n";
+  }
+  editor.value = output.trim();
+  render();
+}
+
+function saveEditorText() {
+  const width = parseInt(widthInput.value);
+  const height = parseInt(heightInput.value);
+  const bpp = parseInt(bppInput.value);
+  const text = `Width: ${width}\nHeight: ${height}\nBitsPerPixel: ${bpp}\nPixelData:\n${editor.value}`;
+  const blob = new Blob([text], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "pixel_image.txt";
+  a.click();
+}
+
+function importEditorText(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const text = e.target.result;
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length < 4) return alert("Invalid file format.");
+    widthInput.value = parseInt(lines[0].split(":")[1]);
+    heightInput.value = parseInt(lines[1].split(":")[1]);
+    let importedBpp = parseInt(lines[2].split(":")[1]);
+    importedBpp = Math.min(Math.max(importedBpp, 1), 24);
+    bppInput.value = importedBpp;
+    bppSlider.value = importedBpp;
+    updateBppFormat(importedBpp);
+    editor.value = lines.slice(4).join("\n");
+    render();
+  };
+  reader.readAsText(file);
+}
+
+function saveImage() {
+  const a = document.createElement("a");
+  a.href = canvas.toDataURL("image/png");
+  a.download = "pixel_image.png";
+  a.click();
+}
+
+updateBppFormat(parseInt(bppInput.value));
+render();
+</script>
+</body>
+</html>
